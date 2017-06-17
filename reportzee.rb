@@ -1,3 +1,8 @@
+# Generate a list of captures suitable for inserting into a
+# Livejournal/Dreamwidth post.
+# The command line arguments for this script should be a list of saved HTML
+# files from "One Day In Your Munzee Life" pages.
+
 require 'oga'
 require 'date'
 
