@@ -5,6 +5,7 @@ require 'launchy'
 class MunzeeAPI
   REDIRECT_URL = 'http://localhost:8558/oauth2/callback'
   CONF_FILE = '~/.reportzee.conf'
+  TOKEN_FILE = '~/.reportzee.token'
 
   class HTTPError < StandardError
   end
@@ -31,9 +32,19 @@ class MunzeeAPI
     end
   end
 
-  def initialize
-    @token = nil
+  def initialize params = {}
     load_config
+
+    @token = nil
+    @client = OAuth2::Client.new(@client_id, @client_secret,
+                                 site: 'https://api.munzee.com',
+                                 authorize_url: '/oauth',
+                                 token_url: '/oauth/login',
+                                 raise_errors: false)
+
+    load_token unless params[:force_login]
+
+    login if @token.nil? || @token.expired?
   end
 
   def load_config
@@ -45,13 +56,17 @@ class MunzeeAPI
     }
   end
 
+  def load_token
+    File.open(File.expand_path(TOKEN_FILE)) { |io|
+      token_hash = JSON.parse(io.read)
+      @token = OAuth2::AccessToken.from_hash(@client, token_hash)
+    }
+  rescue
+    nil
+  end
+
   def login
-    client = OAuth2::Client.new(@client_id, @client_secret,
-                                site: 'https://api.munzee.com',
-                                authorize_url: '/oauth',
-                                token_url: '/oauth/login',
-                                raise_errors: false)
-    url = client.auth_code.authorize_url(redirect_uri: REDIRECT_URL, scope: 'read')
+    url = @client.auth_code.authorize_url(redirect_uri: REDIRECT_URL, scope: 'read')
 
     log = WEBrick::Log.new($stdout, WEBrick::Log::ERROR)
     server = WEBrick::HTTPServer.new(Port: 8558, Logger: log, AccessLog: [])
@@ -68,13 +83,17 @@ class MunzeeAPI
     server.shutdown
     # puts "code = #{auth_code}"
 
-    token1 = client.auth_code.get_token(auth_code, :redirect_uri => REDIRECT_URL)
+    token1 = @client.auth_code.get_token(auth_code, :redirect_uri => REDIRECT_URL)
 
     token_hash = token1.params['data']['token']
-    p token_hash
+    # p token_hash
 
-    @token = OAuth2::AccessToken.from_hash(client, token_hash)
+    @token = OAuth2::AccessToken.from_hash(@client, token_hash)
     @token.options[:header_format] = '%s'
+
+    File.open(File.expand_path(TOKEN_FILE), 'w') { |io|
+      io.write(@token.to_hash.to_json)
+    }
 
     # puts "Bearer token: #{@token.token}"
   end
@@ -89,9 +108,8 @@ class MunzeeAPI
   end
 end
 
+# munz = MunzeeAPI.new(force_login: true)
 munz = MunzeeAPI.new
-
-munz.login
 
 result = munz.post('/user', username: 'mortonfox')
 p result
