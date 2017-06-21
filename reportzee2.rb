@@ -53,7 +53,8 @@ class MunzeeAPI
                                 raise_errors: false)
     url = client.auth_code.authorize_url(redirect_uri: REDIRECT_URL, scope: 'read')
 
-    server = WEBrick::HTTPServer.new(Port: 8558)
+    log = WEBrick::Log.new($stdout, WEBrick::Log::ERROR)
+    server = WEBrick::HTTPServer.new(Port: 8558, Logger: log, AccessLog: [])
     server.mount '/oauth2/callback', Callback
 
     Thread.new {
@@ -65,7 +66,7 @@ class MunzeeAPI
     auth_code = Callback.wait_auth_code
 
     server.shutdown
-    puts "code = #{auth_code}"
+    # puts "code = #{auth_code}"
 
     token1 = client.auth_code.get_token(auth_code, :redirect_uri => REDIRECT_URL)
 
@@ -75,7 +76,7 @@ class MunzeeAPI
     @token = OAuth2::AccessToken.from_hash(client, token_hash)
     @token.options[:header_format] = '%s'
 
-    puts "Bearer token: #{@token.token}"
+    # puts "Bearer token: #{@token.token}"
   end
 
   def post path, params
