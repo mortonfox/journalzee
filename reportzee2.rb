@@ -2,9 +2,8 @@ require 'oauth2'
 require 'webrick'
 
 class MunzeeAPI
-  CLIENT_ID = '********'
-  CLIENT_SECRET = '********'
   REDIRECT_URL = 'http://localhost:8558/oauth2/callback'
+  CONF_FILE = '~/.reportzee.conf'
 
   class HTTPError < StandardError
   end
@@ -33,10 +32,20 @@ class MunzeeAPI
 
   def initialize
     @token = nil
+    load_config
+  end
+
+  def load_config
+    config = YAML.load_file(File.expand_path(CONF_FILE))
+
+    ['client_id', 'client_secret'].each { |key|
+      raise "#{key} is missing from configuration file #{CONF_FILE}" unless config.key?(key)
+      instance_variable_set("@#{key}", config[key])
+    }
   end
 
   def login
-    client = OAuth2::Client.new(CLIENT_ID, CLIENT_SECRET,
+    client = OAuth2::Client.new(@client_id, @client_secret,
                                 site: 'https://api.munzee.com',
                                 authorize_url: '/oauth',
                                 token_url: '/oauth/login',
@@ -71,7 +80,7 @@ class MunzeeAPI
   def post path, params
     res = @token.post(path, body: "data=#{params.to_json}")
     if res.status == 200
-      res.parsed
+      res.parsed['data']
     else
       raise HTTPError, "#{res.status} #{res.body}"
     end
