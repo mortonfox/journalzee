@@ -1,5 +1,6 @@
 require 'oauth2'
 require 'webrick'
+require 'launchy'
 
 class MunzeeAPI
   REDIRECT_URL = 'http://localhost:8558/oauth2/callback'
@@ -59,7 +60,7 @@ class MunzeeAPI
       server.start
     }
 
-    system("open '#{url}'")
+    Launchy.open(url)
 
     auth_code = Callback.wait_auth_code
 
