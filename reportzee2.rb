@@ -1,11 +1,14 @@
 require 'oauth2'
 require 'webrick'
+require 'optparse'
+require 'date'
 require 'launchy'
 
+# Wrapper for Munzee API.
 class MunzeeAPI
-  REDIRECT_URL = 'http://localhost:8558/oauth2/callback'
-  DEFAULT_CONF_FILE = '~/.munzee.conf'
-  DEFAULT_TOKEN_FILE = '~/.munzee.token'
+  REDIRECT_URL = 'http://localhost:8558/oauth2/callback'.freeze
+  DEFAULT_CONF_FILE = '~/.munzee.conf'.freeze
+  DEFAULT_TOKEN_FILE = '~/.munzee.token'.freeze
 
   class HTTPError < StandardError
   end
@@ -114,12 +117,97 @@ class MunzeeAPI
   end
 end
 
-munz = MunzeeAPI.new(force_login: true,
+def parse_cmdline
+  args = {}
+
+  optp = OptionParser.new
+
+  optp.banner = "Usage: #{File.basename $PROGRAM_NAME} [options] [startdate [enddate]]"
+
+  optp.on('-h', '-?', '--help', 'Option help') {
+    puts optp
+    exit
+  }
+
+  optp.on('-l', '--login', 'Ignore saved token and force a new login') {
+    args[:force_login] = true
+  }
+
+  optp.separator <<-ENDS
+Recommended format for dates is YYYY-MM-DD.
+If no dates are specified, process the most recent weekend.
+If only one date is specified, it's a one-day date range.
+  ENDS
+
+  optp.parse!
+
+  if ARGV.empty?
+    # If date range was not specified, use the most recent weekend.
+    today = Date.today
+
+    # How many days back to the most recent Saturday?
+    mod_saturday = (today.wday - 6) % 7
+
+    # If today is Saturday, we want the previous full weekend.
+    mod_saturday = 7 if mod_saturday.zero?
+
+    start_date = today - mod_saturday
+    end_date = start_date + 1
+  else
+    start_date = Date.parse(ARGV.shift)
+
+    end_date = if ARGV.empty?
+                 # Just one date specified means a one-day range.
+                 start_date
+               else
+                 Date.parse(ARGV.shift)
+               end
+  end
+
+  # In case the date range was specified in the wrong order.
+  args[:start_date], args[:end_date] = [start_date, end_date].sort
+
+  args
+end
+
+def do_report munz, startdate, enddate
+  puts <<-EOM
+<lj-cut text="The munzees...">
+<div style="margin: 10px 30px; border: 1px dashed; padding: 10px;">
+  EOM
+
+  startdate.upto(enddate) { |date|
+    result = munz.post('/statzee/player/day', day: date.to_s)
+
+    puts <<-EOM
+
+#{date.strftime '%A %Y-%m-%d'}:
+
+    EOM
+
+    # Iterate over all captures except social munzees.
+    result['captures'].reject { |cap| cap['capture_type_id'] == '32' }.each.with_index(1) { |cap, i|
+      url = "https://www.munzee.com/m/#{cap['username']}/#{cap['code']}/"
+      puts <<-EOM
+#{i}: <a href="#{url}">#{cap['friendly_name']}</a> by #{cap['username']}
+      EOM
+    }
+
+    sleep 1
+  }
+
+  puts <<-EOM
+</div>
+</lj-cut>
+  EOM
+end
+
+args = parse_cmdline
+
+munz = MunzeeAPI.new(force_login: args[:force_login],
                      conf_file: '~/.reportzee.conf',
                      token_file: '~/.reportzee.token')
 
-result = munz.post('/user', username: 'mortonfox')
-require 'ap'
-ap result, indent: -4
+do_report(munz, args[:start_date], args[:end_date])
 
 __END__
