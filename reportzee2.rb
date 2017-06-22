@@ -4,12 +4,13 @@ require 'launchy'
 
 class MunzeeAPI
   REDIRECT_URL = 'http://localhost:8558/oauth2/callback'
-  CONF_FILE = '~/.reportzee.conf'
-  TOKEN_FILE = '~/.reportzee.token'
+  DEFAULT_CONF_FILE = '~/.munzee.conf'
+  DEFAULT_TOKEN_FILE = '~/.munzee.token'
 
   class HTTPError < StandardError
   end
 
+  # Servlet to handle authentication callback.
   class Callback < WEBrick::HTTPServlet::AbstractServlet
     @auth_code = nil
 
@@ -26,14 +27,14 @@ class MunzeeAPI
     end
 
     def self.wait_auth_code
-      while not @auth_code
-        sleep 1
-      end
+      sleep 1 until @auth_code
       @auth_code
     end
   end
 
   def initialize params = {}
+    @conf_file = params[:conf_file] || DEFAULT_CONF_FILE
+    @token_file = params[:token_file] || DEFAULT_TOKEN_FILE
     load_config
 
     @token = nil
@@ -52,16 +53,16 @@ class MunzeeAPI
   end
 
   def load_config
-    config = YAML.load_file(File.expand_path(CONF_FILE))
+    config = YAML.load_file(File.expand_path(@conf_file))
 
-    ['client_id', 'client_secret'].each { |key|
-      raise "#{key} is missing from configuration file #{CONF_FILE}" unless config.key?(key)
+    %w(client_id client_secret).each { |key|
+      raise "#{key} is missing from configuration file #{@conf_file}" unless config.key?(key)
       instance_variable_set("@#{key}", config[key])
     }
   end
 
   def load_token
-    File.open(File.expand_path(TOKEN_FILE)) { |io|
+    File.open(File.expand_path(@token_file)) { |io|
       token_hash = JSON.parse(io.read)
       @token = OAuth2::AccessToken.from_hash(@client, token_hash)
       @token.options[:header_format] = '%s'
@@ -88,7 +89,7 @@ class MunzeeAPI
 
     server.shutdown
 
-    token1 = @client.auth_code.get_token(auth_code, :redirect_uri => REDIRECT_URL)
+    token1 = @client.auth_code.get_token(auth_code, redirect_uri: REDIRECT_URL)
 
     # Munzee returns the token two levels deep in the JSON response. Extract
     # the token and recreate our AccessToken.
@@ -98,25 +99,24 @@ class MunzeeAPI
     @token.options[:header_format] = '%s'
 
     # Save the token to the token file.
-    File.open(File.expand_path(TOKEN_FILE), 'w') { |io|
+    File.open(File.expand_path(@token_file), 'w') { |io|
       io.write(@token.to_hash.to_json)
     }
   end
 
   def post path, params
     res = @token.post(path, body: "data=#{params.to_json}")
-    if res.status == 200
-      res.parsed['data']
-    else
-      raise HTTPError, "#{res.status} #{res.body}"
-    end
+    raise HTTPError, "#{res.status} #{res.body}" if res.status != 200
+    res.parsed['data']
   end
 end
 
-# munz = MunzeeAPI.new(force_login: true)
-munz = MunzeeAPI.new
+munz = MunzeeAPI.new(force_login: true,
+                     conf_file: '~/.reportzee.conf',
+                     token_file: '~/.reportzee.token')
 
 result = munz.post('/user', username: 'mortonfox')
-p result
+require 'ap'
+ap result, indent: -4
 
 __END__
