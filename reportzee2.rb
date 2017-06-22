@@ -80,6 +80,9 @@ class MunzeeAPI
     server = WEBrick::HTTPServer.new(Port: 8558, Logger: log, AccessLog: [])
     server.mount '/oauth2/callback', Callback
 
+    # Suppress the favicon.ico error message.
+    server.mount_proc('/favicon.ico') { raise WEBrick::HTTPStatus::NotFound }
+
     Thread.new { server.start }
 
     # Open the authorization URL and wait for the callback.
