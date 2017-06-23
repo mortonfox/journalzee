@@ -175,6 +175,24 @@ If only one date is specified, it's a one-day date range.
   args
 end
 
+def do_report_day munz, date
+  result = munz.post('/statzee/player/day', day: date)
+
+  puts <<-EOM
+
+#{date.strftime '%A %Y-%m-%d'}:
+
+  EOM
+
+  # Iterate over all captures except social munzees.
+  result['captures'].reject { |cap| cap['capture_type_id'] == '32' }.each.with_index(1) { |cap, i|
+    url = "https://www.munzee.com/m/#{cap['username']}/#{cap['code']}/"
+    puts <<-EOM
+#{i}: <a href="#{url}">#{cap['friendly_name']}</a> by #{cap['username']}
+    EOM
+  }
+end
+
 def do_report munz, startdate, enddate
   puts <<-EOM
 <lj-cut text="The munzees...">
@@ -182,23 +200,8 @@ def do_report munz, startdate, enddate
   EOM
 
   startdate.upto(enddate) { |date|
-    result = munz.post('/statzee/player/day', day: date.to_s)
-
-    puts <<-EOM
-
-#{date.strftime '%A %Y-%m-%d'}:
-
-    EOM
-
-    # Iterate over all captures except social munzees.
-    result['captures'].reject { |cap| cap['capture_type_id'] == '32' }.each.with_index(1) { |cap, i|
-      url = "https://www.munzee.com/m/#{cap['username']}/#{cap['code']}/"
-      puts <<-EOM
-#{i}: <a href="#{url}">#{cap['friendly_name']}</a> by #{cap['username']}
-      EOM
-    }
-
-    sleep 1
+    do_report_day(munz, date)
+    sleep 1 # Avoid flooding the Munzee API.
   }
 
   puts <<-EOM
