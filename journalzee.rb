@@ -1,3 +1,8 @@
+# Generate a list of daily captures suitable for inserting into a
+# Livejournal/Dreamwidth post.
+# Requires oauth2 and launchy gems. (Run 'gem install oauth2 launchy')
+# Run 'ruby journalzee.rb -h' for command line help.
+
 require 'oauth2'
 require 'webrick'
 require 'optparse'
@@ -134,7 +139,7 @@ def parse_cmdline
   }
 
   optp.separator <<-ENDS
-Recommended format for dates is YYYY-MM-DD.
+Recommended format for dates is YYYY-MM-DD, e.g. 2017-06-15.
 If no dates are specified, process the most recent weekend.
 If only one date is specified, it's a one-day date range.
   ENDS
@@ -205,8 +210,8 @@ end
 args = parse_cmdline
 
 munz = MunzeeAPI.new(force_login: args[:force_login],
-                     conf_file: '~/.reportzee.conf',
-                     token_file: '~/.reportzee.token')
+                     conf_file: '~/.journalzee.conf',
+                     token_file: '~/.journalzee.token')
 
 do_report(munz, args[:start_date], args[:end_date])
 
