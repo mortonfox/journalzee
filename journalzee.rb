@@ -178,14 +178,19 @@ end
 def do_report_day munz, date
   result = munz.post('/statzee/player/day', day: date)
 
+  # Omit social munzees.
+  captures = result['captures'].reject { |cap| cap['capture_type_id'] == '32' }
+
+  return if captures.empty?
+
   puts <<-EOM
 
 #{date.strftime '%A %Y-%m-%d'}:
 
   EOM
 
-  # Iterate over all captures except social munzees.
-  result['captures'].reject { |cap| cap['capture_type_id'] == '32' }.each.with_index(1) { |cap, i|
+  # Iterate over all captures.
+  captures.each.with_index(1) { |cap, i|
     url = "https://www.munzee.com/m/#{cap['username']}/#{cap['code']}/"
     puts <<-EOM
 #{i}: <a href="#{url}">#{cap['friendly_name']}</a> by #{cap['username']}
